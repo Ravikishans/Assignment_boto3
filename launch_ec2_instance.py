@@ -19,6 +19,16 @@ def launch_ec2_instance(config, subnet_id):
                     sudo service nginx enable
                     echo "Hello, World!" > /var/www/html/index.html
                     sudo service nginx reload''',
+                    
+        NetworkInterfaces=[
+            {
+                'AssociatePublicIpAddress': True,
+                'DeleteOnTermination': True,
+                'DeviceIndex': 0
+            }
+        ],
+
+                    
         TagSpecifications=[
             {
                 'ResourceType': 'instance',
