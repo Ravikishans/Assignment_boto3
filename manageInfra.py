@@ -171,7 +171,7 @@ def tear_down_infrastructure():
     sns.delete_topic(TopicArn=config['scaling_topic_arn'])
     print("SNS topics deleted successfully.")
     
-    time.sleep(20)
+    time.sleep(30)
     
     # Detach and delete Internet Gateway
     print("Detaching and deleting Internet Gateway...")
