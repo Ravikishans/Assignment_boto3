@@ -119,13 +119,18 @@ def tear_down_infrastructure():
     asg = boto3.client('autoscaling', region_name=config['region'])
     sns = boto3.client('sns', region_name=config['region'])
 
+
+    # Release Elastic IP Addresses
     ec2_client = boto3.client('ec2', region_name=config['region'])
+    print("Releasing Elastic IP addresses...")
     eip_addresses = ec2_client.describe_addresses()
     for eip in eip_addresses['Addresses']:
         if 'AssociationId' in eip:
             ec2_client.disassociate_address(AssociationId=eip['AssociationId'])
             ec2_client.release_address(AllocationId=eip['AllocationId'])
             print(f"Released Elastic IP '{eip['PublicIp']}'")
+        else:
+            print(f"No association found for Elastic IP '{eip['PublicIp']}'")
 
     # Terminate EC2 instances
     ec2_resource = boto3.resource('ec2', region_name=config['region'])
@@ -166,15 +171,27 @@ def tear_down_infrastructure():
     sns.delete_topic(TopicArn=config['scaling_topic_arn'])
     print("SNS topics deleted successfully.")
     
-    time.sleep(5)
+    time.sleep(20)
+    
     # Detach and delete Internet Gateway
-    ec2 = boto3.client('ec2', region_name=config['region'])
+    print("Detaching and deleting Internet Gateway...")
     if 'igw_id' in config:
-        ec2.detach_internet_gateway(InternetGatewayId=config['igw_id'], VpcId=config['vpc_id'])
-        ec2.delete_internet_gateway(InternetGatewayId=config['igw_id'])
-        print(f"Internet Gateway '{config['igw_id']}' deleted successfully.")
+        # Unassociate Public IPs
+        print("Unassociating any remaining public IP addresses...")
+        # Check if there are still any resources with associated public IPs
+        instances = ec2_client.describe_instances(Filters=[{'Name': 'vpc-id', 'Values': [config['vpc_id']]}])
+        for reservation in instances['Reservations']:
+            for instance in reservation['Instances']:
+                if 'PublicIpAddress' in instance:
+                    # Manually disassociate the public IP if necessary
+                    print(f"Instance {instance['InstanceId']} still has a public IP. Ensure it's disassociated.")
         
+        ec2_client.detach_internet_gateway(InternetGatewayId=config['igw_id'], VpcId=config['vpc_id'])
+        ec2_client.delete_internet_gateway(InternetGatewayId=config['igw_id'])
+        print(f"Internet Gateway '{config['igw_id']}' deleted successfully.")
+    
     time.sleep(30)    
+
     # Delete security group
     ec2_resource = boto3.resource('ec2', region_name=config['region'])
     ec2_resource.SecurityGroup(config['security_group_id']).delete()
