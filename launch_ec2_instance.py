@@ -16,6 +16,7 @@ def launch_ec2_instance(config, subnet_id):
         # AssociatePublicIpAddress=True,
         UserData='''#!/bin/bash
         sudo apt-get update -y
+        sudo apt-get install nginx -y
         sudo apt-get install python3-pip -y
         sudo pip3 install flask boto3
         mkdir /home/ubuntu/app
@@ -69,7 +70,7 @@ def launch_ec2_instance(config, subnet_id):
 
         sudo mkdir /home/ubuntu/uploads
         sudo chmod -R 777 /home/ubuntu/uploads
-        sudo python3 /home/ubuntu/app/app.py &
+        nohup python3 /home/ubuntu/app/app.py > /home/ubuntu/app/app.log 2>&1 &
         ''',
         TagSpecifications=[
             {

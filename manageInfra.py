@@ -119,9 +119,18 @@ def tear_down_infrastructure():
     asg = boto3.client('autoscaling', region_name=config['region'])
     sns = boto3.client('sns', region_name=config['region'])
 
+    ec2_client = boto3.client('ec2', region_name=config['region'])
+    eip_addresses = ec2_client.describe_addresses()
+    for eip in eip_addresses['Addresses']:
+        if 'AssociationId' in eip:
+            ec2_client.disassociate_address(AssociationId=eip['AssociationId'])
+            ec2_client.release_address(AllocationId=eip['AllocationId'])
+            print(f"Released Elastic IP '{eip['PublicIp']}'")
+
     # Terminate EC2 instances
+    ec2_resource = boto3.resource('ec2', region_name=config['region'])
     for instance_id in config['instance_ids']:
-        instance = ec2.Instance(instance_id)
+        instance = ec2_resource.Instance(instance_id)
         instance.terminate()
         instance.wait_until_terminated()
         print(f"EC2 instance '{instance_id}' terminated successfully.")
