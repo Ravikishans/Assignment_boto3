@@ -1,14 +1,17 @@
 import boto3
 import json
 
-def create_vpc():
-    ec2 = boto3.client('ec2')
+def create_vpc(config):
+    ec2 = boto3.client('ec2', region_name=config['region'])
 
     vpc_response = ec2.create_vpc(CidrBlock='10.0.0.0/16')
     vpc_id = vpc_response['Vpc']['VpcId']
     ec2.create_tags(Resources=[vpc_id], Tags=[{'Key': 'Name', 'Value': 'Boto3Assi'}])
 
     print(f"VPC '{vpc_id}' created successfully.")
+
+    ec2.modify_vpc_attribute(VpcId=vpc_id, EnableDnsSupport={'Value': True})
+    ec2.modify_vpc_attribute(VpcId=vpc_id, EnableDnsHostnames={'Value': True})
 
     # Describe availability zones
     availability_zones = ec2.describe_availability_zones()['AvailabilityZones']
@@ -26,6 +29,10 @@ def create_vpc():
     subnet1_id = subnet1_response['Subnet']['SubnetId']
     subnet2_id = subnet2_response['Subnet']['SubnetId']
     print(f"Subnets '{subnet1_id}' and '{subnet2_id}' created successfully.")
+
+    ec2.modify_subnet_attribute(SubnetId=subnet1_id, MapPublicIpOnLaunch={'Value': True})
+    ec2.modify_subnet_attribute(SubnetId=subnet2_id, MapPublicIpOnLaunch={'Value': True})
+
 
     igw_response = ec2.create_internet_gateway()
     igw_id = igw_response['InternetGateway']['InternetGatewayId']
@@ -59,29 +66,61 @@ def create_vpc():
     print(f"Security Group '{security_group_id}' created successfully within VPC '{vpc_id}'.")
 
     # Allow inbound traffic on port 80 (HTTP) and 22 (SSH)
-    ec2.authorize_security_group_ingress(
-        GroupId=security_group_id,
-        IpPermissions=[
-            {
-                'IpProtocol': 'tcp',
-                'FromPort': 80,
-                'ToPort': 80,
-                'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
-            },
-            {
-                'IpProtocol': 'tcp',
-                'FromPort': 22,
-                'ToPort': 22,
-                'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
-            }
-        ]
-    )
-    print("Ingress rules added to the security group.")
-
-
-    with open('config.json') as f:
-        config = json.load(f)
     
+    # Define rules
+    ingress_rules = [
+        {
+            'IpProtocol': 'tcp',
+            'FromPort': 80,
+            'ToPort': 80,
+            'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+        },
+        {
+            'IpProtocol': 'tcp',
+            'FromPort': 22,
+            'ToPort': 22,
+            'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+        },
+        {
+            'IpProtocol': 'tcp',
+            'FromPort': 443,
+            'ToPort': 443,
+            'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+        }
+    ]
+    
+    egress_rules = [
+        {
+            'IpProtocol': '-1',  # Represents all protocols
+            'FromPort': -1,      # Represents all ports
+            'ToPort': -1,        # Represents all ports
+            'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+        }
+    ]
+
+    # Add ingress rules
+    for rule in ingress_rules:
+        try:
+            ec2.authorize_security_group_ingress(GroupId=security_group_id, IpPermissions=[rule])
+            print(f"Ingress rule {rule} added successfully.")
+        except ec2.exceptions.ClientError as e:
+            if 'InvalidPermission.Duplicate' in str(e):
+                print(f"Ingress rule {rule} already exists.")
+            else:
+                raise
+
+    # Add egress rules
+    for rule in egress_rules:
+        try:
+            ec2.authorize_security_group_egress(GroupId=security_group_id, IpPermissions=[rule])
+            print(f"Egress rule {rule} added successfully.")
+        except ec2.exceptions.ClientError as e:
+            if 'InvalidPermission.Duplicate' in str(e):
+                print(f"Egress rule {rule} already exists.")
+            else:
+                raise
+
+    # Update config with new resources
     config.update({
         "vpc_id": vpc_id,
         "subnet1_id": subnet1_id,
@@ -92,7 +131,9 @@ def create_vpc():
     })
 
     with open('config.json', 'w') as f:
-        json.dump(config, f)
+        json.dump(config, f, indent=4)
 
 if __name__ == "__main__":
-    create_vpc()
+    with open('config.json') as f:
+        config = json.load(f)
+    create_vpc(config)

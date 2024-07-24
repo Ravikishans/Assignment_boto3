@@ -7,6 +7,7 @@ import setup_sns_notifications
 import sys
 import json
 import boto3
+import time
 
 def deploy_infrastructure():
     with open('config.json') as f:
@@ -16,7 +17,7 @@ def deploy_infrastructure():
     create_s3_bucket.create_s3_bucket(config)
     
     # Step 2: Create VPC
-    create_vpc.create_vpc()
+    create_vpc.create_vpc(config)
     
     with open('config.json') as f:
         config = json.load(f)
@@ -117,7 +118,7 @@ def tear_down_infrastructure():
     elbv2 = boto3.client('elbv2', region_name=config['region'])
     asg = boto3.client('autoscaling', region_name=config['region'])
     sns = boto3.client('sns', region_name=config['region'])
-    
+
     # Terminate EC2 instances
     for instance_id in config['instance_ids']:
         instance = ec2.Instance(instance_id)
@@ -137,6 +138,8 @@ def tear_down_infrastructure():
         ForceDelete=True
     )
     print("Auto Scaling Group deleted successfully.")
+
+    time.sleep(30)
     
     # Delete target group
     elbv2.delete_target_group(TargetGroupArn=config['target_group_arn'])
@@ -154,33 +157,44 @@ def tear_down_infrastructure():
     sns.delete_topic(TopicArn=config['scaling_topic_arn'])
     print("SNS topics deleted successfully.")
     
-    # # Detach and delete Internet Gateway
-    # ec2.detach_internet_gateway(InternetGatewayId=config['igw_id'], VpcId=config['vpc_id'])
-    # ec2.delete_internet_gateway(InternetGatewayId=config['igw_id'])
-    # print(f"Internet Gateway '{config['igw_id']}' deleted successfully.")
-
+    time.sleep(5)
+    # Detach and delete Internet Gateway
+    ec2 = boto3.client('ec2', region_name=config['region'])
+    if 'igw_id' in config:
+        ec2.detach_internet_gateway(InternetGatewayId=config['igw_id'], VpcId=config['vpc_id'])
+        ec2.delete_internet_gateway(InternetGatewayId=config['igw_id'])
+        print(f"Internet Gateway '{config['igw_id']}' deleted successfully.")
+        
+    time.sleep(20)    
     # Delete security group
-    ec2.SecurityGroup(config['security_group_id']).delete()
+    ec2_resource = boto3.resource('ec2', region_name=config['region'])
+    ec2_resource.SecurityGroup(config['security_group_id']).delete()
     print(f"Security Group '{config['security_group_id']}' deleted successfully.")
     
-    # # Delete subnets
-    # ec2.Subnet(config['subnet1_id']).delete()
-    # ec2.Subnet(config['subnet2_id']).delete()
-    # print(f"Subnets '{config['subnet1_id']}' and '{config['subnet2_id']}' deleted successfully.")
+    time.sleep(15)
+
+    # Delete subnetss
+    ec2_resource.Subnet(config['subnet1_id']).delete()
+    ec2_resource.Subnet(config['subnet2_id']).delete()
+    print(f"Subnets '{config['subnet1_id']}' and '{config['subnet2_id']}' deleted successfully.")
     
-    # # Delete route table
-    # ec2.RouteTable(config['route_table_id']).delete()
-    # print(f"Route Table '{config['route_table_id']}' deleted successfully.")
+    # Delete route table
+    ec2_resource.RouteTable(config['route_table_id']).delete()
+    print(f"Route Table '{config['route_table_id']}' deleted successfully.")
     
     # Delete VPC
-    ec2.Vpc(config['vpc_id']).delete()
+    ec2_resource.Vpc(config['vpc_id']).delete()
     print(f"VPC '{config['vpc_id']}' deleted successfully.")
     
     # Delete S3 bucket
     s3 = boto3.client('s3', region_name=config['region'])
+    # Delete S3 bucket
+    s3.list_objects_v2(Bucket=config['bucket_name']).get('Contents', [])
+    for obj in s3.list_objects_v2(Bucket=config['bucket_name']).get('Contents', []):
+        s3.delete_object(Bucket=config['bucket_name'], Key=obj['Key'])
     s3.delete_bucket(Bucket=config['bucket_name'])
     print(f"S3 bucket '{config['bucket_name']}' deleted successfully.")
-    
+
     print("Infrastructure tear down completed successfully.")
 
 
