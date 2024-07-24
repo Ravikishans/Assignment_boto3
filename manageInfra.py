@@ -165,7 +165,7 @@ def tear_down_infrastructure():
         ec2.delete_internet_gateway(InternetGatewayId=config['igw_id'])
         print(f"Internet Gateway '{config['igw_id']}' deleted successfully.")
         
-    time.sleep(20)    
+    time.sleep(30)    
     # Delete security group
     ec2_resource = boto3.resource('ec2', region_name=config['region'])
     ec2_resource.SecurityGroup(config['security_group_id']).delete()
@@ -173,7 +173,7 @@ def tear_down_infrastructure():
     
     time.sleep(15)
 
-    # Delete subnetss
+    # Delete subnets
     ec2_resource.Subnet(config['subnet1_id']).delete()
     ec2_resource.Subnet(config['subnet2_id']).delete()
     print(f"Subnets '{config['subnet1_id']}' and '{config['subnet2_id']}' deleted successfully.")
