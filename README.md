@@ -16,7 +16,7 @@ This repository contains scripts to automatically manages the lifecycle of a web
 1. Clone the repository:
 
     ```sh
-    git clone [https://github.com/yourusername/yourrepository.git](https://github.com/Ravikishans/Assignment_boto3.git)
+    git clone https://github.com/Ravikishans/Assignment_boto3.git
     ```
 
 2. Update the `config.json` file with your AWS details:
